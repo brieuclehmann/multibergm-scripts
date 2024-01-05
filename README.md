@@ -3,7 +3,7 @@
 First, install `multibergm` package:
 
 ```
-devtools::install_github("brieuclehmann/github")
+devtools::install_github("brieuclehmann/multibergm")
 ```
 
 Then, run the following scripts.

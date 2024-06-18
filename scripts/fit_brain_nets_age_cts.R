@@ -7,6 +7,9 @@ set.seed(1)
 n_nets  <- as.integer(Sys.getenv("n_nets"))
 n_batches <- as.integer(Sys.getenv("n_batches"))
 decay <- as.double(Sys.getenv("decay"))
+covar <- Sys.getenv("covar")
+model <- Sys.getenv("model")
+print(model)
 
 burn_in <- 2000
 main_iters <- 20000
@@ -19,7 +22,28 @@ ergm_formula <- ~ edges +
 
 # Load networks
 nets <- readRDS("data/constK3_n587.RDS")
-net_ind <- c(1:n_nets, rev(length(nets):(length(nets) - n_nets + 1)))
+ages <- scan("data/ages.txt")
+cattell <- scan("data/cattell.txt")
+ages <- scale(ages)
+#ages <- ages - min(ages, na.rm = TRUE)
+cattell[is.nan(cattell)] <- NA
+cattell <- scale(cattell)
+#cattell <- cattell - min(cattell, na.rm = TRUE)
+
+nets <- lapply(seq(length(nets)), 
+               function(i) {
+                 set.network.attribute(nets[[i]], "age", ages[i])
+                 set.network.attribute(nets[[i]], "cattell", cattell[i])
+                 }
+               )
+
+if (covar == "age") {
+  net_ind <- round(seq(1, 587, length.out = n_nets))
+} else {
+  na_cattell <- which(is.na(cattell))
+  net_ind <- order(cattell)[round(seq(1, 587 - length(na_cattell), length.out = n_nets))]
+}
+
 nets <- nets[net_ind]
 n_nodes <- network.size(nets[[1]])
 node_info <- function(x) {
@@ -29,19 +53,26 @@ node_info <- function(x) {
   x
 }
 nets <- lapply(nets, node_info)
+
 # nets_common <- generate_networks(ergm_formula, n_nodes, coef_common)
 # get_net_stats.list(nets_common, ergm_formula, "model") %>% apply(2, range)
 
 # Fit multibergm
-group_ind <- rep(c(0, 1), each = n_nets)
+
 multi_formula <- update(ergm_formula, nets ~ .)
-nets <- lapply(seq(length(nets)), 
-               function(x) set.network.attribute(nets[[x]], 
-                                                 "group", 
-                                                 group_ind[x]))
-model_formula <- ~ 1 + group
+
+# if (covar == "age") {
+#   model_formula <- ~ 1 + age
+# } else {
+#   model_formula <- ~ 1 + cattell
+# }
+model_formula <- ~ 1 + age*cattell
+if (model == "quadratic") {
+  model_formula <- ~ 1 + poly(age, degree = 2, raw = TRUE) + poly(cattell, degree = 2, raw = TRUE) + age:cattell
+}
+print(model_formula)
+
 model_matrix <- get_model_matrix(multi_formula, model_formula)
-model_matrix[ ,1] <- model_matrix[ ,1] - model_matrix[ ,2]
 
 control <- control_multibergm(multi_formula,
                               mod_mat = model_matrix,
@@ -56,5 +87,7 @@ fit_multi <- multibergm(multi_formula,
                         control = control)
 
 # Save output
-out_file <- file.path("output", paste0("brain_n", n_nets, ".RDS"))
+out_file <- file.path("output", paste0("brain_cts_n", n_nets, ".RDS"))
+if (model == "quadratic") out_file <- file.path("output", paste0("brain_cts_n", n_nets, "_quadratic.RDS"))
+
 saveRDS(fit_multi, out_file)

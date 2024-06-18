@@ -1,5 +1,4 @@
-## R scripts to generate results in 'A Bayesian multilevel model for populations of
-networks using exponential-family random graphs'
+## R scripts to generate results in 'A Bayesian multilevel model for populations of networks using exponential-family random graphs'
 
 First, install `multibergm` package:
 
